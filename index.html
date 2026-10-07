@@ -1,0 +1,768 @@
+<!DOCTYPE html>
+<html lang="zh-TW" class="h-full">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>天氣與寶可夢資訊看板 - Weather & Pokémon Dashboard</title>
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Lucide Icons CDN -->
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <!-- Google Fonts: Inter -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ['Inter', 'sans-serif'],
+          },
+          animation: {
+            'fade-in': 'fadeIn 0.5s ease-out forwards',
+            'spin-slow': 'spin 8s linear infinite',
+            'pulse-subtle': 'pulseSubtle 2.5s cubic-bezier(0.4, 0, 0.6, 1) infinite',
+          },
+          keyframes: {
+            fadeIn: {
+              '0%': { opacity: '0', transform: 'scale(0.98)' },
+              '100%': { opacity: '1', transform: 'scale(1)' },
+            },
+            pulseSubtle: {
+              '0%, 100%': { opacity: '1' },
+              '50%': { opacity: '0.4' },
+            }
+          }
+        }
+      }
+    }
+  </script>
+
+  <style>
+    /* 隱藏滾動條保持看板純淨視覺 */
+    body::-webkit-scrollbar {
+      display: none;
+    }
+    body {
+      -ms-overflow-style: none;
+      scrollbar-width: none;
+    }
+    .glass-card {
+      background: rgba(255, 255, 255, 0.85);
+      backdrop-filter: blur(16px);
+      -webkit-backdrop-filter: blur(16px);
+      border: 1px solid rgba(255, 255, 255, 0.4);
+    }
+    .dark .glass-card {
+      background: rgba(30, 41, 59, 0.8);
+      backdrop-filter: blur(16px);
+      -webkit-backdrop-filter: blur(16px);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+    }
+  </style>
+</head>
+<body class="h-full bg-gradient-to-br from-slate-100 via-sky-50 to-amber-50 dark:from-slate-950 dark:via-slate-900 dark:to-zinc-900 text-slate-800 dark:text-slate-100 flex flex-col font-sans transition-colors duration-500 overflow-x-hidden selection:bg-amber-400 selection:text-slate-900">
+
+  <!-- 頂部導航與看板控制列 -->
+  <header class="w-full max-w-7xl mx-auto px-4 sm:px-6 pt-5 pb-3 flex flex-wrap items-center justify-between gap-4 select-none">
+    <div class="flex items-center space-x-3">
+      <div class="w-10 h-10 rounded-2xl bg-rose-500 text-white flex items-center justify-center shadow-lg shadow-rose-500/25 relative overflow-hidden">
+        <!-- 精靈球造型圖標 -->
+        <div class="w-6 h-6 border-2 border-white rounded-full flex flex-col justify-between items-center relative py-[1px]">
+          <div class="w-full h-[2px] bg-white absolute top-1/2 -translate-y-1/2"></div>
+          <div class="w-2.5 h-2.5 bg-white border-2 border-rose-500 rounded-full z-10 absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2"></div>
+        </div>
+      </div>
+      <div>
+        <h1 class="font-bold text-xl sm:text-2xl tracking-tight text-slate-900 dark:text-white flex items-center gap-2">
+          Daily Pokémon & Forecast
+          <span class="text-xs px-2 py-0.5 rounded-full bg-rose-100 text-rose-700 dark:bg-rose-950/70 dark:text-rose-300 font-medium">即時看板</span>
+        </h1>
+        <p class="text-xs text-slate-500 dark:text-slate-400 font-normal" id="current-clock">載入時間中...</p>
+      </div>
+    </div>
+
+    <!-- 頂端控制鈕群組 -->
+    <div class="flex items-center gap-2">
+      <!-- 城市快速選單 -->
+      <div class="relative">
+        <select id="city-selector" class="appearance-none bg-white/80 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 text-xs sm:text-sm font-medium py-2 pl-3 pr-8 rounded-xl shadow-sm focus:outline-none focus:ring-2 focus:ring-amber-500 cursor-pointer transition">
+          <option value="auto">📍 取得目前定位</option>
+          <option value="25.0330,121.5654,台北 (Taipei)" selected>台北 (Taipei)</option>
+          <option value="24.1477,120.6736,台中 (Taichung)">台中 (Taichung)</option>
+          <option value="22.6273,120.3014,高雄 (Kaohsiung)">高雄 (Kaohsiung)</option>
+          <option value="35.6762,139.6503,東京 (Tokyo)">東京 (Tokyo)</option>
+          <option value="37.7749,-122.4194,舊金山 (San Francisco)">舊金山 (San Francisco)</option>
+          <option value="51.5074,-0.1278,倫敦 (London)">倫敦 (London)</option>
+        </select>
+        <i data-lucide="chevron-down" class="w-4 h-4 text-slate-400 absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none"></i>
+      </div>
+
+      <!-- 深色模式切換 -->
+      <button id="btn-theme" class="p-2.5 rounded-xl bg-white/80 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:text-amber-500 dark:hover:text-amber-400 shadow-sm transition active:scale-95" title="切換色彩模式">
+        <i data-lucide="moon" class="w-4 h-4 hidden dark:block"></i>
+        <i data-lucide="sun" class="w-4 h-4 block dark:hidden"></i>
+      </button>
+
+      <!-- 全螢幕切換 -->
+      <button id="btn-fullscreen" class="p-2.5 rounded-xl bg-white/80 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:text-amber-500 dark:hover:text-amber-400 shadow-sm transition active:scale-95" title="切換全螢幕看板">
+        <i data-lucide="maximize" class="w-4 h-4"></i>
+      </button>
+    </div>
+  </header>
+
+  <!-- 主內容容器 -->
+  <main class="flex-1 w-full max-w-7xl mx-auto px-4 sm:px-6 py-3 flex items-center justify-center">
+    <div class="w-full grid grid-cols-1 lg:grid-cols-12 gap-6 items-stretch">
+      
+      <!-- ============================================== -->
+      <!-- 天氣卡片看板 (Weather Card - 5 欄) -->
+      <!-- ============================================== -->
+      <section class="lg:col-span-5 flex flex-col justify-between glass-card rounded-3xl p-6 sm:p-8 shadow-xl shadow-slate-200/50 dark:shadow-none transition-all duration-300 relative overflow-hidden">
+        
+        <!-- 背景流光點綴 -->
+        <div class="absolute -top-24 -left-24 w-64 h-64 bg-sky-400/10 dark:bg-sky-500/10 rounded-full blur-3xl pointer-events-none"></div>
+        <div class="absolute -bottom-24 -right-24 w-64 h-64 bg-amber-400/10 dark:bg-amber-500/10 rounded-full blur-3xl pointer-events-none"></div>
+
+        <div>
+          <!-- 卡片頂部狀態行 -->
+          <div class="flex items-center justify-between mb-6">
+            <div class="flex items-center gap-2">
+              <span class="inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold bg-sky-100 text-sky-800 dark:bg-sky-900/60 dark:text-sky-200">
+                <i data-lucide="map-pin" class="w-3.5 h-3.5 mr-1 text-sky-600 dark:text-sky-400"></i>
+                <span id="weather-location-label">台北 (Taipei)</span>
+              </span>
+              <span id="weather-source-badge" class="text-[11px] text-slate-400">預設地點</span>
+            </div>
+
+            <!-- 刷新按鈕 -->
+            <button id="btn-refresh-weather" class="p-2 rounded-xl text-slate-400 hover:text-sky-600 dark:hover:text-sky-400 hover:bg-slate-100 dark:hover:bg-slate-800 transition active:rotate-180" title="更新天氣資訊">
+              <i data-lucide="rotate-cw" class="w-4 h-4"></i>
+            </button>
+          </div>
+
+          <!-- 主要溫度展示區 -->
+          <div class="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 my-4">
+            <div>
+              <div class="flex items-baseline">
+                <span id="weather-temp" class="text-6xl sm:text-7xl font-extrabold tracking-tighter text-slate-900 dark:text-white">--</span>
+                <span class="text-3xl sm:text-4xl font-light text-slate-400 dark:text-slate-500 ml-1">°C</span>
+              </div>
+              <p id="weather-desc" class="text-lg font-medium text-slate-700 dark:text-slate-200 mt-1 flex items-center gap-1.5">
+                載入天氣中...
+              </p>
+            </div>
+            <!-- 大天氣圖示 -->
+            <div id="weather-icon-wrapper" class="w-24 h-24 rounded-3xl bg-slate-100/70 dark:bg-slate-800/70 flex items-center justify-center text-amber-500 shadow-inner">
+              <i data-lucide="cloud-sun" class="w-14 h-14"></i>
+            </div>
+          </div>
+        </div>
+
+        <!-- 輔助氣象指標（網格） -->
+        <div class="mt-8 pt-6 border-t border-slate-200/70 dark:border-slate-800">
+          <div class="grid grid-cols-3 gap-3 text-center">
+            <!-- 體感溫度 -->
+            <div class="p-3 rounded-2xl bg-white/50 dark:bg-slate-800/40 border border-slate-100 dark:border-slate-800/60">
+              <span class="text-xs text-slate-400 flex items-center justify-center gap-1">
+                <i data-lucide="thermometer" class="w-3.5 h-3.5 text-rose-500"></i>體感溫度
+              </span>
+              <p id="weather-apparent-temp" class="text-lg font-semibold text-slate-800 dark:text-slate-100 mt-1">--°C</p>
+            </div>
+
+            <!-- 相對濕度 -->
+            <div class="p-3 rounded-2xl bg-white/50 dark:bg-slate-800/40 border border-slate-100 dark:border-slate-800/60">
+              <span class="text-xs text-slate-400 flex items-center justify-center gap-1">
+                <i data-lucide="droplets" class="w-3.5 h-3.5 text-sky-500"></i>相對濕度
+              </span>
+              <p id="weather-humidity" class="text-lg font-semibold text-slate-800 dark:text-slate-100 mt-1">--%</p>
+            </div>
+
+            <!-- 當日高低溫 -->
+            <div class="p-3 rounded-2xl bg-white/50 dark:bg-slate-800/40 border border-slate-100 dark:border-slate-800/60">
+              <span class="text-xs text-slate-400 flex items-center justify-center gap-1">
+                <i data-lucide="chevrons-up-down" class="w-3.5 h-3.5 text-amber-500"></i>高 / 低溫
+              </span>
+              <p id="weather-temp-range" class="text-lg font-semibold text-slate-800 dark:text-slate-100 mt-1">--° / --°</p>
+            </div>
+          </div>
+
+          <!-- 天氣更新狀態提示列 -->
+          <div class="mt-4 flex items-center justify-between text-xs text-slate-400 px-1">
+            <span id="weather-sync-status" class="flex items-center gap-1.5">
+              <span class="w-2 h-2 rounded-full bg-emerald-500"></span>自動同步每 30 分鐘
+            </span>
+            <span id="weather-updated-time">最後更新: --:--</span>
+          </div>
+        </div>
+
+      </section>
+
+      <!-- ============================================== -->
+      <!-- 寶可夢展示卡片 (Pokémon Card - 7 欄) -->
+      <!-- ============================================== -->
+      <section class="lg:col-span-7 flex flex-col justify-between glass-card rounded-3xl p-6 sm:p-8 shadow-xl shadow-slate-200/50 dark:shadow-none transition-all duration-300 relative overflow-hidden group">
+        
+        <!-- 動態屬性光暈背景 -->
+        <div id="pokemon-glow-bg" class="absolute -top-20 -right-20 w-72 h-72 bg-amber-400/20 dark:bg-amber-400/10 rounded-full blur-3xl pointer-events-none transition-all duration-700"></div>
+
+        <!-- 卡片頂部工具列 -->
+        <div class="flex flex-wrap items-center justify-between gap-3 mb-4 z-10">
+          <div class="flex items-center space-x-2">
+            <!-- 寶可夢編號徽章 -->
+            <span id="pokemon-id-badge" class="inline-flex items-center px-3 py-1 rounded-full text-xs font-bold bg-slate-900 text-white dark:bg-white dark:text-slate-900 tracking-wider">
+              #0025
+            </span>
+            <!-- 寶可夢屬性標籤容器 -->
+            <div id="pokemon-types-container" class="flex items-center gap-1.5">
+              <span class="text-xs font-semibold px-2.5 py-0.5 rounded-full bg-amber-100 text-amber-800 dark:bg-amber-900/60 dark:text-amber-200">
+                Electric
+              </span>
+            </div>
+          </div>
+
+          <!-- 控制工具：叫聲音效、輪播切換與隨機更換 -->
+          <div class="flex items-center gap-2">
+            <!-- 叫聲播放鈕 -->
+            <button id="btn-play-cry" class="p-2 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:text-rose-500 dark:hover:text-rose-400 shadow-sm transition active:scale-95" title="播放寶可夢叫聲">
+              <i data-lucide="volume-2" class="w-4 h-4"></i>
+            </button>
+
+            <!-- 自動輪播開關 -->
+            <label class="flex items-center cursor-pointer gap-2 text-xs font-medium text-slate-500 dark:text-slate-400 select-none mr-1">
+              <div class="relative">
+                <input type="checkbox" id="toggle-autoplay" class="sr-only peer">
+                <div class="w-8 h-4 bg-slate-300 peer-focus:outline-none rounded-full peer dark:bg-slate-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-3 after:w-3 after:transition-all peer-checked:bg-rose-500"></div>
+              </div>
+              <span class="hidden sm:inline">10s 巡禮</span>
+            </label>
+
+            <!-- 隨機寶可夢按鈕 -->
+            <button id="btn-next-pokemon" class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-rose-500 hover:bg-rose-600 text-white font-medium text-xs sm:text-sm shadow-md shadow-rose-500/20 active:scale-95 transition">
+              <i data-lucide="sparkles" class="w-3.5 h-3.5"></i>
+              探索下一隻
+            </button>
+          </div>
+        </div>
+
+        <!-- 寶可夢主視覺畫框 (固定 16:10 寬高比，杜絕 CLS) -->
+        <div class="relative w-full aspect-[16/10] rounded-2xl overflow-hidden bg-slate-100/80 dark:bg-slate-800/60 shadow-inner flex items-center justify-center p-4">
+          
+          <!-- 骨架屏載入動畫 -->
+          <div id="pokemon-skeleton" class="absolute inset-0 bg-slate-200 dark:bg-slate-800 animate-pulse-subtle flex flex-col items-center justify-center gap-2 text-slate-400">
+            <i data-lucide="loader-2" class="w-10 h-10 animate-spin text-rose-500"></i>
+            <span class="text-xs">呼叫寶可夢中...</span>
+          </div>
+
+          <!-- 寶可夢官方立繪 -->
+          <img 
+            id="pokemon-image" 
+            src="" 
+            alt="寶可夢照片" 
+            class="max-w-[75%] max-h-[82%] object-contain drop-shadow-2xl transition-all duration-500 opacity-0 relative z-10 hover:scale-105"
+            onerror="onPokemonImageError()"
+          />
+
+          <!-- 錯誤重試覆蓋層 -->
+          <div id="pokemon-error-overlay" class="absolute inset-0 bg-rose-50 dark:bg-slate-900 flex-col items-center justify-center p-6 text-center hidden z-20">
+            <i data-lucide="alert-circle" class="w-10 h-10 text-rose-500 mb-2"></i>
+            <p class="text-sm font-semibold text-slate-800 dark:text-slate-100">寶可夢資料載入失敗</p>
+            <p class="text-xs text-slate-500 dark:text-slate-400 mt-1 mb-4">無法連線至 PokéAPI，請檢查網路</p>
+            <button id="btn-retry-pokemon" class="px-4 py-2 bg-rose-500 hover:bg-rose-600 text-white rounded-xl text-xs font-semibold shadow transition">
+              重新載入
+            </button>
+          </div>
+
+          <!-- 底部資訊列：名稱、身高體重指標 -->
+          <div class="absolute bottom-0 inset-x-0 bg-gradient-to-t from-slate-950/70 via-slate-900/30 to-transparent p-4 flex items-end justify-between text-white pointer-events-none transition-opacity duration-300">
+            <div>
+              <h2 id="pokemon-name" class="text-xl sm:text-2xl font-black capitalize drop-shadow-md tracking-wide">Pikachu</h2>
+              <div class="flex items-center gap-3 text-xs text-slate-200 mt-0.5">
+                <span id="pokemon-height">身高: 0.4 m</span>
+                <span>•</span>
+                <span id="pokemon-weight">體重: 6.0 kg</span>
+              </div>
+            </div>
+            <span class="text-xs text-slate-300 drop-shadow-md font-mono hidden sm:inline">PokéAPI v2</span>
+          </div>
+        </div>
+
+        <!-- 快速熱門選單列 -->
+        <div class="mt-3 flex items-center justify-between gap-2 overflow-x-auto py-1 text-xs no-scrollbar">
+          <span class="text-slate-400 font-medium shrink-0">人氣推薦:</span>
+          <div class="flex items-center gap-1.5 shrink-0" id="quick-pokemon-pills">
+            <button data-pokemon="pikachu" class="px-2.5 py-1 rounded-lg bg-white/70 dark:bg-slate-800/70 hover:bg-amber-100 dark:hover:bg-amber-900/40 text-slate-700 dark:text-slate-200 font-medium transition active:scale-95 border border-slate-200/50 dark:border-slate-700">⚡ 皮卡丘</button>
+            <button data-pokemon="eevee" class="px-2.5 py-1 rounded-lg bg-white/70 dark:bg-slate-800/70 hover:bg-amber-100 dark:hover:bg-amber-900/40 text-slate-700 dark:text-slate-200 font-medium transition active:scale-95 border border-slate-200/50 dark:border-slate-700">🦊 伊布</button>
+            <button data-pokemon="charizard" class="px-2.5 py-1 rounded-lg bg-white/70 dark:bg-slate-800/70 hover:bg-rose-100 dark:hover:bg-rose-900/40 text-slate-700 dark:text-slate-200 font-medium transition active:scale-95 border border-slate-200/50 dark:border-slate-700">🔥 噴火龍</button>
+            <button data-pokemon="gengar" class="px-2.5 py-1 rounded-lg bg-white/70 dark:bg-slate-800/70 hover:bg-purple-100 dark:hover:bg-purple-900/40 text-slate-700 dark:text-slate-200 font-medium transition active:scale-95 border border-slate-200/50 dark:border-slate-700">👻 耿鬼</button>
+            <button data-pokemon="mewtwo" class="px-2.5 py-1 rounded-lg bg-white/70 dark:bg-slate-800/70 hover:bg-indigo-100 dark:hover:bg-indigo-900/40 text-slate-700 dark:text-slate-200 font-medium transition active:scale-95 border border-slate-200/50 dark:border-slate-700">🔮 超夢</button>
+          </div>
+        </div>
+
+        <!-- 輪播倒數進度條 -->
+        <div class="w-full bg-slate-200 dark:bg-slate-800 h-1 rounded-full mt-3 overflow-hidden">
+          <div id="autoplay-progressbar" class="h-full bg-rose-500 w-0 transition-all duration-100 ease-linear"></div>
+        </div>
+
+      </section>
+
+    </div>
+  </main>
+
+  <!-- 頁尾宣告資訊 -->
+  <footer class="w-full max-w-7xl mx-auto px-6 py-4 text-center text-xs text-slate-400 dark:text-slate-500 flex flex-wrap items-center justify-between gap-2 border-t border-slate-200/50 dark:border-slate-800/50">
+    <p>資料提供：Open-Meteo & PokéAPI • 精緻前端無障礙設計</p>
+    <p class="flex items-center gap-1">
+      Made with <i data-lucide="heart" class="w-3.5 h-3.5 text-rose-500 fill-rose-500 inline"></i> for Weather & Pokémon trainers
+    </p>
+  </footer>
+
+  <script>
+    /**
+     * WMO Weather interpretation codes (WW) 映射表
+     * 負責將 Open-Meteo 的天氣代碼轉換為直覺中文描述與對應圖示
+     */
+    const WMO_CODE_MAP = {
+      0: { desc: '天晴朗', icon: 'sun', color: 'text-amber-500' },
+      1: { desc: '大致晴朗', icon: 'sun-medium', color: 'text-amber-400' },
+      2: { desc: '多雲時晴', icon: 'cloud-sun', color: 'text-sky-400' },
+      3: { desc: '多雲陰天', icon: 'cloud', color: 'text-slate-400' },
+      45: { desc: '有霧', icon: 'cloud-fog', color: 'text-slate-400' },
+      48: { desc: '沉積霜霧', icon: 'cloud-fog', color: 'text-slate-400' },
+      51: { desc: '微細毛毛雨', icon: 'cloud-drizzle', color: 'text-sky-400' },
+      53: { desc: '輕度毛毛雨', icon: 'cloud-drizzle', color: 'text-sky-500' },
+      55: { desc: '濃密毛毛雨', icon: 'cloud-drizzle', color: 'text-sky-600' },
+      61: { desc: '小雨', icon: 'cloud-rain', color: 'text-sky-500' },
+      63: { desc: '中雨', icon: 'cloud-rain', color: 'text-sky-600' },
+      65: { desc: '強降雨', icon: 'cloud-heavy-rain', color: 'text-blue-600' },
+      71: { desc: '微量降雪', icon: 'cloud-snow', color: 'text-indigo-300' },
+      73: { desc: '中度降雪', icon: 'cloud-snow', color: 'text-indigo-400' },
+      75: { desc: '大降雪', icon: 'snowflake', color: 'text-indigo-500' },
+      80: { desc: '零星陣雨', icon: 'cloud-sun-rain', color: 'text-sky-500' },
+      81: { desc: '中度陣雨', icon: 'cloud-rain', color: 'text-sky-600' },
+      82: { desc: '暴雨陣雨', icon: 'cloud-heavy-rain', color: 'text-blue-700' },
+      95: { desc: '雷陣雨', icon: 'cloud-lightning', color: 'text-amber-500' },
+      96: { desc: '雷雨伴隨微冰雹', icon: 'cloud-lightning', color: 'text-amber-600' },
+      99: { desc: '強烈雷陣雨伴隨大冰雹', icon: 'zap', color: 'text-red-500' },
+    };
+
+    /**
+     * 應用程式全域狀態
+     */
+    const AppState = {
+      coords: { lat: 25.0330, lon: 121.5654, name: '台北 (Taipei)', isAuto: false },
+      weatherData: null,
+      currentPokemon: null,
+      pokemonAudio: null,
+      isAutoplay: false,
+      autoplayTimer: null,
+      progressTimer: null,
+      progressCount: 0,
+      weatherPollTimer: null,
+    };
+
+    /**
+     * 寶可夢屬性對應配色字典
+     */
+    const POKEMON_TYPE_COLORS = {
+      normal: { bg: 'bg-stone-500', text: 'text-stone-100', glow: 'rgba(168, 167, 122, 0.25)' },
+      fire: { bg: 'bg-orange-500', text: 'text-orange-50', glow: 'rgba(238, 129, 48, 0.3)' },
+      water: { bg: 'bg-blue-500', text: 'text-blue-50', glow: 'rgba(99, 144, 240, 0.3)' },
+      electric: { bg: 'bg-amber-400', text: 'text-amber-950', glow: 'rgba(247, 208, 44, 0.35)' },
+      grass: { bg: 'bg-emerald-500', text: 'text-emerald-50', glow: 'rgba(122, 199, 76, 0.3)' },
+      ice: { bg: 'bg-cyan-400', text: 'text-cyan-950', glow: 'rgba(150, 217, 214, 0.3)' },
+      fighting: { bg: 'bg-red-700', text: 'text-red-50', glow: 'rgba(194, 46, 40, 0.3)' },
+      poison: { bg: 'bg-purple-600', text: 'text-purple-50', glow: 'rgba(163, 62, 161, 0.3)' },
+      ground: { bg: 'bg-amber-600', text: 'text-amber-50', glow: 'rgba(226, 191, 101, 0.3)' },
+      flying: { bg: 'bg-indigo-400', text: 'text-indigo-950', glow: 'rgba(169, 143, 243, 0.3)' },
+      psychic: { bg: 'bg-pink-500', text: 'text-pink-50', glow: 'rgba(249, 85, 135, 0.3)' },
+      bug: { bg: 'bg-lime-600', text: 'text-lime-50', glow: 'rgba(166, 185, 26, 0.3)' },
+      rock: { bg: 'bg-stone-600', text: 'text-stone-50', glow: 'rgba(182, 161, 54, 0.3)' },
+      ghost: { bg: 'bg-purple-800', text: 'text-purple-50', glow: 'rgba(115, 87, 151, 0.3)' },
+      dragon: { bg: 'bg-indigo-700', text: 'text-indigo-50', glow: 'rgba(111, 53, 252, 0.3)' },
+      dark: { bg: 'bg-neutral-800', text: 'text-neutral-50', glow: 'rgba(112, 87, 70, 0.3)' },
+      steel: { bg: 'bg-slate-500', text: 'text-slate-50', glow: 'rgba(183, 183, 206, 0.3)' },
+      fairy: { bg: 'bg-rose-400', text: 'text-rose-950', glow: 'rgba(214, 133, 173, 0.3)' },
+    };
+
+    /**
+     * 天氣模組 (WeatherService)
+     */
+    const WeatherService = {
+      async fetchWeather(lat, lon) {
+        // 請求目前即時天氣與今日高低溫
+        const endpoint = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current=temperature_2m,relative_humidity_2m,apparent_temperature,weather_code&daily=temperature_2m_max,temperature_2m_min&timezone=auto`;
+        
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 8000); // 8 秒超時保護
+
+        try {
+          const response = await fetch(endpoint, { signal: controller.signal });
+          clearTimeout(timeoutId);
+          if (!response.ok) throw new Error(`HTTP 錯誤: ${response.status}`);
+          return await response.json();
+        } catch (error) {
+          clearTimeout(timeoutId);
+          throw error;
+        }
+      },
+
+      updateUI(data, locationName) {
+        if (!data || !data.current) return;
+
+        const current = data.current;
+        const daily = data.daily || {};
+
+        // 溫度與體感
+        document.getElementById('weather-temp').textContent = Math.round(current.temperature_2m);
+        document.getElementById('weather-apparent-temp').textContent = `${Math.round(current.apparent_temperature)}°C`;
+        document.getElementById('weather-humidity').textContent = `${current.relative_humidity_2m}%`;
+
+        // 今日最高/最低溫
+        if (daily.temperature_2m_max && daily.temperature_2m_min) {
+          const max = Math.round(daily.temperature_2m_max[0]);
+          const min = Math.round(daily.temperature_2m_min[0]);
+          document.getElementById('weather-temp-range').textContent = `${max}° / ${min}°`;
+        }
+
+        // 地點標籤
+        document.getElementById('weather-location-label').textContent = locationName;
+        document.getElementById('weather-source-badge').textContent = AppState.coords.isAuto ? '📍 衛星定位' : '固定城市';
+
+        // 解析天氣狀況代碼
+        const weatherInfo = WMO_CODE_MAP[current.weather_code] || { desc: '天氣晴朗', icon: 'sun', color: 'text-amber-500' };
+        document.getElementById('weather-desc').innerHTML = `
+          <span>${weatherInfo.desc}</span>
+        `;
+
+        // 更新天氣大圖示
+        const iconWrapper = document.getElementById('weather-icon-wrapper');
+        iconWrapper.className = `w-24 h-24 rounded-3xl bg-slate-100/70 dark:bg-slate-800/70 flex items-center justify-center shadow-inner ${weatherInfo.color}`;
+        iconWrapper.innerHTML = `<i data-lucide="${weatherInfo.icon}" class="w-14 h-14"></i>`;
+
+        // 狀態與時間
+        const now = new Date();
+        const timeStr = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
+        document.getElementById('weather-updated-time').textContent = `最後更新: ${timeStr}`;
+        document.getElementById('weather-sync-status').innerHTML = `<span class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>自動同步每 30 分鐘`;
+
+        // 重新渲染 Lucide 圖示
+        lucide.createIcons();
+      }
+    };
+
+    /**
+     * 寶可夢模組 (PokemonService)
+     */
+    const PokemonService = {
+      async fetchPokemon(idOrName = 'pikachu') {
+        const endpoint = `https://pokeapi.co/api/v2/pokemon/${idOrName}`;
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 9000);
+
+        try {
+          const res = await fetch(endpoint, { signal: controller.signal });
+          clearTimeout(timeoutId);
+          if (!res.ok) throw new Error(`HTTP error: ${res.status}`);
+          return await res.json();
+        } catch (err) {
+          clearTimeout(timeoutId);
+          throw err;
+        }
+      },
+
+      setLoading(isLoading) {
+        const skeleton = document.getElementById('pokemon-skeleton');
+        const img = document.getElementById('pokemon-image');
+        const errorOverlay = document.getElementById('pokemon-error-overlay');
+
+        if (isLoading) {
+          skeleton.classList.remove('hidden');
+          img.classList.add('opacity-0');
+          errorOverlay.classList.add('hidden');
+        } else {
+          skeleton.classList.add('hidden');
+          img.classList.remove('opacity-0');
+        }
+      },
+
+      updateUI(pokemon) {
+        if (!pokemon) return;
+
+        // 圖鑑編號 (如 #0025)
+        const idFormatted = `#${String(pokemon.id).padStart(4, '0')}`;
+        document.getElementById('pokemon-id-badge').textContent = idFormatted;
+
+        // 名稱 (首字大寫)
+        const formattedName = pokemon.name.charAt(0).toUpperCase() + pokemon.name.slice(1);
+        document.getElementById('pokemon-name').textContent = formattedName;
+
+        // 身高與體重 (PokéAPI 回傳為分米與百克)
+        const heightMeters = (pokemon.height / 10).toFixed(1);
+        const weightKg = (pokemon.weight / 10).toFixed(1);
+        document.getElementById('pokemon-height').textContent = `身高: ${heightMeters} m`;
+        document.getElementById('pokemon-weight').textContent = `體重: ${weightKg} kg`;
+
+        // 屬性標籤
+        const typesContainer = document.getElementById('pokemon-types-container');
+        typesContainer.innerHTML = '';
+        pokemon.types.forEach(t => {
+          const typeName = t.type.name;
+          const conf = POKEMON_TYPE_COLORS[typeName] || { bg: 'bg-slate-600', text: 'text-white', glow: 'rgba(255,255,255,0.1)' };
+          const badge = document.createElement('span');
+          badge.className = `text-xs font-semibold px-2.5 py-0.5 rounded-full capitalize ${conf.bg} ${conf.text} shadow-sm`;
+          badge.textContent = typeName;
+          typesContainer.appendChild(badge);
+        });
+
+        // 調整背景光暈顏色 (取第一屬性)
+        const primaryType = pokemon.types[0]?.type?.name || 'normal';
+        const primaryColor = POKEMON_TYPE_COLORS[primaryType] || POKEMON_TYPE_COLORS.electric;
+        document.getElementById('pokemon-glow-bg').style.background = primaryColor.glow;
+
+        // 設定叫聲音效 (PokéAPI 提供 cries 資源)
+        if (pokemon.cries && pokemon.cries.latest) {
+          AppState.pokemonAudio = new Audio(pokemon.cries.latest);
+        } else {
+          AppState.pokemonAudio = null;
+        }
+
+        // 圖片預載
+        const artworkUrl = pokemon.sprites?.other?.['official-artwork']?.front_default 
+          || pokemon.sprites?.other?.home?.front_default 
+          || pokemon.sprites?.front_default;
+
+        if (artworkUrl) {
+          const preloadImg = new Image();
+          preloadImg.src = artworkUrl;
+          preloadImg.onload = () => {
+            const imgElem = document.getElementById('pokemon-image');
+            imgElem.src = artworkUrl;
+            imgElem.alt = formattedName;
+            PokemonService.setLoading(false);
+          };
+          preloadImg.onerror = () => {
+            window.onPokemonImageError();
+          };
+        } else {
+          window.onPokemonImageError();
+        }
+      }
+    };
+
+    // 全域圖片載入失敗處理
+    window.onPokemonImageError = function() {
+      document.getElementById('pokemon-skeleton').classList.add('hidden');
+      document.getElementById('pokemon-error-overlay').classList.remove('hidden');
+      document.getElementById('pokemon-error-overlay').classList.add('flex');
+    };
+
+    /**
+     * 核心流程控制 (Controller)
+     */
+    async function loadWeatherData() {
+      const refreshBtn = document.getElementById('btn-refresh-weather');
+      refreshBtn.classList.add('animate-spin');
+
+      try {
+        const data = await WeatherService.fetchWeather(AppState.coords.lat, AppState.coords.lon);
+        AppState.weatherData = data;
+        WeatherService.updateUI(data, AppState.coords.name);
+      } catch (error) {
+        console.error('天氣載入失敗:', error);
+        document.getElementById('weather-desc').textContent = '暫時無法連線至天氣服務';
+        document.getElementById('weather-sync-status').innerHTML = `<span class="w-2 h-2 rounded-full bg-rose-500"></span>連線中斷 (保留舊資料)`;
+      } finally {
+        setTimeout(() => refreshBtn.classList.remove('animate-spin'), 600);
+      }
+    }
+
+    async function loadPokemon(idOrName = 'pikachu') {
+      PokemonService.setLoading(true);
+      resetProgress();
+
+      try {
+        const pokemon = await PokemonService.fetchPokemon(idOrName);
+        AppState.currentPokemon = pokemon;
+        PokemonService.updateUI(pokemon);
+      } catch (err) {
+        console.error('寶可夢載入失敗:', err);
+        window.onPokemonImageError();
+      }
+    }
+
+    // 隨機選取全世代寶可夢 (1 到 1025 號)
+    function loadRandomPokemon() {
+      const randomId = Math.floor(Math.random() * 1025) + 1;
+      loadPokemon(randomId);
+    }
+
+    /**
+     * 輪播倒數與進度條邏輯
+     */
+    function resetProgress() {
+      AppState.progressCount = 0;
+      const bar = document.getElementById('autoplay-progressbar');
+      bar.style.width = '0%';
+    }
+
+    function startAutoplay() {
+      stopAutoplay();
+      AppState.isAutoplay = true;
+      resetProgress();
+
+      // 每 100ms 更新進度條 (總計 10 秒 = 10000ms)
+      AppState.progressTimer = setInterval(() => {
+        AppState.progressCount += 1;
+        const percent = Math.min((AppState.progressCount / 100) * 100, 100);
+        document.getElementById('autoplay-progressbar').style.width = `${percent}%`;
+
+        if (AppState.progressCount >= 100) {
+          resetProgress();
+          loadRandomPokemon();
+        }
+      }, 100);
+    }
+
+    function stopAutoplay() {
+      AppState.isAutoplay = false;
+      if (AppState.progressTimer) clearInterval(AppState.progressTimer);
+      resetProgress();
+    }
+
+    /**
+     * 瀏覽器定位回退機制
+     */
+    function requestLocation() {
+      if ('geolocation' in navigator) {
+        navigator.geolocation.getCurrentPosition(
+          (pos) => {
+            AppState.coords = {
+              lat: pos.coords.latitude.toFixed(4),
+              lon: pos.coords.longitude.toFixed(4),
+              name: '我的目前位置',
+              isAuto: true,
+            };
+            loadWeatherData();
+          },
+          (err) => {
+            console.warn('Geolocation 拒絕或不可用，退回預設城市:', err.message);
+            AppState.coords = { lat: 25.0330, lon: 121.5654, name: '台北 (Taipei)', isAuto: false };
+            loadWeatherData();
+          },
+          { timeout: 6000 }
+        );
+      } else {
+        AppState.coords = { lat: 25.0330, lon: 121.5654, name: '台北 (Taipei)', isAuto: false };
+        loadWeatherData();
+      }
+    }
+
+    /**
+     * 初始化事件監聽
+     */
+    function initEventListeners() {
+      // 城市切換事件
+      document.getElementById('city-selector').addEventListener('change', (e) => {
+        const val = e.target.value;
+        if (val === 'auto') {
+          requestLocation();
+        } else {
+          const [lat, lon, name] = val.split(',');
+          AppState.coords = { lat: parseFloat(lat), lon: parseFloat(lon), name: name, isAuto: false };
+          loadWeatherData();
+        }
+      });
+
+      // 手動更新天氣
+      document.getElementById('btn-refresh-weather').addEventListener('click', () => {
+        loadWeatherData();
+      });
+
+      // 隨機寶可夢與重試
+      document.getElementById('btn-next-pokemon').addEventListener('click', () => {
+        loadRandomPokemon();
+      });
+      document.getElementById('btn-retry-pokemon').addEventListener('click', () => {
+        loadRandomPokemon();
+      });
+
+      // 人氣快捷選單點擊
+      document.getElementById('quick-pokemon-pills').addEventListener('click', (e) => {
+        const targetBtn = e.target.closest('button[data-pokemon]');
+        if (targetBtn) {
+          const pName = targetBtn.getAttribute('data-pokemon');
+          loadPokemon(pName);
+        }
+      });
+
+      // 播放叫聲按鈕
+      document.getElementById('btn-play-cry').addEventListener('click', () => {
+        if (AppState.pokemonAudio) {
+          AppState.pokemonAudio.currentTime = 0;
+          AppState.pokemonAudio.play().catch(e => console.log('Audio autoplay prevented:', e));
+        }
+      });
+
+      // 輪播開關切換
+      document.getElementById('toggle-autoplay').addEventListener('change', (e) => {
+        if (e.target.checked) {
+          startAutoplay();
+        } else {
+          stopAutoplay();
+        }
+      });
+
+      // 暗色模式切換
+      document.getElementById('btn-theme').addEventListener('click', () => {
+        document.documentElement.classList.toggle('dark');
+        lucide.createIcons();
+      });
+
+      // 全螢幕切換
+      document.getElementById('btn-fullscreen').addEventListener('click', () => {
+        if (!document.fullscreenElement) {
+          document.documentElement.requestFullscreen().catch(() => {});
+        } else {
+          if (document.exitFullscreen) {
+            document.exitFullscreen();
+          }
+        }
+      });
+
+      // 時鐘更新計時器
+      setInterval(() => {
+        const now = new Date();
+        const options = { 
+          month: 'long', 
+          day: 'numeric', 
+          weekday: 'short',
+          hour: '2-digit', 
+          minute: '2-digit', 
+          second: '2-digit', 
+          hour12: false 
+        };
+        document.getElementById('current-clock').textContent = now.toLocaleString('zh-TW', options);
+      }, 1000);
+    }
+
+    // 應用程式進入點
+    window.addEventListener('DOMContentLoaded', () => {
+      lucide.createIcons();
+      initEventListeners();
+
+      // 初次載入資料 (預設優先載入 Pikachu)
+      loadWeatherData();
+      loadPokemon('pikachu');
+
+      // 天氣每 30 分鐘自動背景更新
+      AppState.weatherPollTimer = setInterval(() => {
+        loadWeatherData();
+      }, 30 * 60 * 1000);
+    });
+  </script>
+</body>
+</html>
